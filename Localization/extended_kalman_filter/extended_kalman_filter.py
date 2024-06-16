@@ -30,12 +30,14 @@ INPUT_NOISE = np.diag([1.0, np.deg2rad(30.0)]) ** 2
 GPS_NOISE = np.diag([0.5, 0.5]) ** 2
 
 DT = 0.1  # time tick [s]
-SIM_TIME = 50.0  # simulation time [s]
+SIM_TIME = 100.0  # simulation time [s]
 
 show_animation = True
 
 
 def calc_input():
+    """线速度和角速度控制，当前为定值，分别为1m/s和0.1rad/s
+    """
     v = 1.0  # [m/s]
     yawrate = 0.1  # [rad/s]
     u = np.array([[v], [yawrate]])
@@ -43,20 +45,30 @@ def calc_input():
 
 
 def observation(xTrue, xd, u):
-    xTrue = motion_model(xTrue, u)
-
-    # add noise to gps x-y
-    z = observation_model(xTrue) + GPS_NOISE @ np.random.randn(2, 1)
 
     # add noise to input
     ud = u + INPUT_NOISE @ np.random.randn(2, 1)
 
-    xd = motion_model(xd, ud)
+    xTrue = motion_model(xTrue, ud)
+
+    # 根据GPS获得带有噪声的位置观测
+    z = observation_model(xTrue) + GPS_NOISE @ np.random.randn(2, 1)
+
+    xd = motion_model(xd, u)
 
     return xTrue, z, xd, ud
 
 
 def motion_model(x, u):
+    """纯运动学模型，更新下一时刻的状态
+
+    Args:
+        x (_type_): 状态为x,y,yaw,v
+        u (_type_): 输入为v，w，两个定值
+
+    Returns:
+        _type_: 下一时刻的状态，x,y,yaw,v
+    """
     F = np.array([[1.0, 0, 0, 0],
                   [0, 1.0, 0, 0],
                   [0, 0, 1.0, 0],
@@ -73,6 +85,14 @@ def motion_model(x, u):
 
 
 def observation_model(x):
+    """观测模型，对机器人的位置x,y进行观测
+
+    Args:
+        x (_type_): 机器人的状态x,y,yaw,v
+
+    Returns:
+        _type_: 机器人的位置x,y
+    """
     H = np.array([
         [1, 0, 0, 0],
         [0, 1, 0, 0]
@@ -121,18 +141,18 @@ def jacob_h():
 
 def ekf_estimation(xEst, PEst, z, u):
     #  Predict
-    xPred = motion_model(xEst, u)
-    jF = jacob_f(xEst, u)
-    PPred = jF @ PEst @ jF.T + Q
+    xPred = motion_model(xEst, u)  # 先验估计
+    jF = jacob_f(xEst, u)  
+    PPred = jF @ PEst @ jF.T + Q  # 先验误差斜方差
 
     #  Update
     jH = jacob_h()
     zPred = observation_model(xPred)
     y = z - zPred
     S = jH @ PPred @ jH.T + R
-    K = PPred @ jH.T @ np.linalg.inv(S)
-    xEst = xPred + K @ y
-    PEst = (np.eye(len(xEst)) - K @ jH) @ PPred
+    K = PPred @ jH.T @ np.linalg.inv(S)  # 卡尔曼增益
+    xEst = xPred + K @ y  # 后验估计
+    PEst = (np.eye(len(xEst)) - K @ jH) @ PPred  # 更新误差斜方差
     return xEst, PEst
 
 
@@ -142,17 +162,17 @@ def main():
     time = 0.0
 
     # State Vector [x y yaw v]'
-    xEst = np.zeros((4, 1))
+    xEst = np.zeros((4, 1))  
     xTrue = np.zeros((4, 1))
-    PEst = np.eye(4)
+    PEst = np.eye(4)  
 
     xDR = np.zeros((4, 1))  # Dead reckoning
 
     # history
-    hxEst = xEst
-    hxTrue = xTrue
-    hxDR = xTrue
-    hz = np.zeros((2, 1))
+    hxEst = xEst  # 经过EKF推测出的机器人的位姿
+    hxTrue = xTrue  # 记录机器人的真实位姿
+    hxDR = xTrue    # 记录机器人的理论位姿(输入未加噪声)
+    hz = np.zeros((2, 1))  # 记录根据GPS获得的带有噪声的机器人位置x，y观测
 
     while SIM_TIME >= time:
         time += DT
@@ -160,7 +180,7 @@ def main():
 
         xTrue, z, xDR, ud = observation(xTrue, xDR, u)
 
-        xEst, PEst = ekf_estimation(xEst, PEst, z, ud)
+        xEst, PEst = ekf_estimation(xEst, PEst, z, u)
 
         # store data history
         hxEst = np.hstack((hxEst, xEst))
@@ -180,7 +200,7 @@ def main():
                      hxDR[1, :].flatten(), "-k")
             plt.plot(hxEst[0, :].flatten(),
                      hxEst[1, :].flatten(), "-r")
-            plot_covariance_ellipse(xEst[0, 0], xEst[1, 0], PEst)
+            plot_covariance_ellipse(xEst[0, 0], xEst[1, 0], PEst)  # 绘制斜方差椭圆
             plt.axis("equal")
             plt.grid(True)
             plt.pause(0.001)

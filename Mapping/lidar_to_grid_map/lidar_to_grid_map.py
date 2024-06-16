@@ -33,6 +33,7 @@ def file_read(f):
 
 def bresenham(start, end):
     """
+    计算在珊格图中从一点到另一点直线上的所有点坐标的方法
     Implementation of Bresenham's line drawing algorithm
     See en.wikipedia.org/wiki/Bresenham's_line_algorithm
     Bresenham's Line Algorithm
@@ -78,8 +79,7 @@ def bresenham(start, end):
 
 def calc_grid_map_config(ox, oy, xy_resolution):
     """
-    Calculates the size, and the maximum distances according to the the
-    measurement center
+    根据测量中心计算珊格地图的尺寸以及上下左右边界
     """
     min_x = round(min(ox) - EXTEND_AREA / 2.0)
     min_y = round(min(oy) - EXTEND_AREA / 2.0)
@@ -87,7 +87,6 @@ def calc_grid_map_config(ox, oy, xy_resolution):
     max_y = round(max(oy) + EXTEND_AREA / 2.0)
     xw = int(round((max_x - min_x) / xy_resolution))
     yw = int(round((max_y - min_y) / xy_resolution))
-    print("The grid map is ", xw, "x", yw, ".")
     return min_x, min_y, max_x, max_y, xw, yw
 
 
@@ -101,6 +100,7 @@ def atan_zero_to_twopi(y, x):
 def init_flood_fill(center_point, obstacle_points, xy_points, min_coord,
                     xy_resolution):
     """
+    填充初始化，将雷达点连线上的珊格点设为0
     center_point: center point
     obstacle_points: detected obstacles points (x,y)
     xy_points: (x,y) point pairs
@@ -126,6 +126,7 @@ def init_flood_fill(center_point, obstacle_points, xy_points, min_coord,
 
 def flood_fill(center_point, occupancy_map):
     """
+    对未填充的区域进行填充
     center_point: starting point (x,y) of fill
     occupancy_map: occupancy map generated from Bresenham ray-tracing
     """
@@ -168,9 +169,9 @@ def generate_ray_casting_grid_map(ox, oy, xy_resolution, breshen=True):
     # default 0.5 -- [[0.5 for i in range(y_w)] for i in range(x_w)]
     occupancy_map = np.ones((x_w, y_w)) / 2
     center_x = int(
-        round(-min_x / xy_resolution))  # center x coordinate of the grid map
+        round(0 - min_x / xy_resolution))  # center x coordinate of the grid map
     center_y = int(
-        round(-min_y / xy_resolution))  # center y coordinate of the grid map
+        round(0 - min_y / xy_resolution))  # center y coordinate of the grid map
     # occupancy grid computed with bresenham ray casting
     if breshen:
         for (x, y) in zip(ox, oy):
@@ -179,7 +180,7 @@ def generate_ray_casting_grid_map(ox, oy, xy_resolution, breshen=True):
             # y coordinate of the the occupied area
             iy = int(round((y - min_y) / xy_resolution))
             laser_beams = bresenham((center_x, center_y), (
-                ix, iy))  # line form the lidar to the occupied point
+                ix, iy))  # 中心点到雷达点直线上的珊格点
             for laser_beam in laser_beams:
                 occupancy_map[laser_beam[0]][
                     laser_beam[1]] = 0.0  # free area 0.0
@@ -214,7 +215,7 @@ def main():
     ox = np.sin(ang) * dist
     oy = np.cos(ang) * dist
     occupancy_map, min_x, max_x, min_y, max_y, xy_resolution = \
-        generate_ray_casting_grid_map(ox, oy, xy_resolution, True)
+        generate_ray_casting_grid_map(ox, oy, xy_resolution, False)
     xy_res = np.array(occupancy_map).shape
     plt.figure(1, figsize=(10, 4))
     plt.subplot(122)

@@ -73,6 +73,8 @@ def icp_matching(previous_points, current_points):
 
 
 def update_homogeneous_matrix(Hin, R, T):
+    """根据旋转矩阵和平移矩阵更新Homogeneous Matrix
+    """
 
     r_size = R.shape[0]
     H = np.zeros((r_size + 1, r_size + 1))
@@ -88,22 +90,29 @@ def update_homogeneous_matrix(Hin, R, T):
 
 
 def nearest_neighbor_association(previous_points, current_points):
+    """计算当前帧与前一帧中每个点的距离和，以及当前帧中每个点与前一帧中最近点的索引
+    """
 
-    # calc the sum of residual errors
+    # 计算当前帧与前一帧中每个点的距离和
     delta_points = previous_points - current_points
     d = np.linalg.norm(delta_points, axis=0)
     error = sum(d)
 
-    # calc index with nearest neighbor assosiation
+    # 计算当前帧中每个点与前一帧中每个点的距离
+    # np.repeat(current_points, previous_points.shape[1], axis=1)效果是每个点重复nPoints次
+    # np.tile(previous_points, (1, current_points.shape[1]))效果是将previous_points重复nPoints次
     d = np.linalg.norm(np.repeat(current_points, previous_points.shape[1], axis=1)
                        - np.tile(previous_points, (1, current_points.shape[1])), axis=0)
-    indexes = np.argmin(d.reshape(current_points.shape[1], previous_points.shape[1]), axis=1)
 
+    # 找到当前帧中每个点与前一帧中最近点的索引
+    indexes = np.argmin(d.reshape(current_points.shape[1], previous_points.shape[1]), axis=1)
     return indexes, error
 
 
 def svd_motion_estimation(previous_points, current_points):
-    pm = np.mean(previous_points, axis=1)
+    """求W矩阵并进行SVD分解,计算旋转矩阵和平移矩阵
+    """
+    pm = np.mean(previous_points, axis=1) # 两个点集的中心点
     cm = np.mean(current_points, axis=1)
 
     p_shift = previous_points - pm[:, np.newaxis]
@@ -119,7 +128,9 @@ def svd_motion_estimation(previous_points, current_points):
 
 
 def plot_points(previous_points, current_points, figure):
-    # for stopping simulation with the esc key.
+    """绘制先前以及当前点云图像，按Esc键停止仿真。
+    """
+    
     plt.gcf().canvas.mpl_connect(
         'key_release_event',
         lambda event: [exit(0) if event.key == 'escape' else None])

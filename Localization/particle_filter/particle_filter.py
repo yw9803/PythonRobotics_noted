@@ -25,7 +25,7 @@ Q_sim = np.diag([0.2]) ** 2
 R_sim = np.diag([1.0, np.deg2rad(30.0)]) ** 2
 
 DT = 0.1  # time tick [s]
-SIM_TIME = 50.0  # simulation time [s]
+SIM_TIME = 100.0  # simulation time [s]
 MAX_RANGE = 20.0  # maximum observation range
 
 # Particle filter parameter
@@ -43,9 +43,15 @@ def calc_input():
 
 
 def observation(x_true, xd, u, rf_id):
-    x_true = motion_model(x_true, u)
 
-    # add noise to gps x-y
+    # add noise to input
+    ud1 = u[0, 0] + np.random.randn() * R_sim[0, 0] ** 0.5
+    ud2 = u[1, 0] + np.random.randn() * R_sim[1, 1] ** 0.5
+    ud = np.array([[ud1, ud2]]).T
+
+    x_true = motion_model(x_true, ud)
+
+    # 存储观测值，与地标的距离
     z = np.zeros((0, 3))
 
     for i in range(len(rf_id[:, 0])):
@@ -58,12 +64,7 @@ def observation(x_true, xd, u, rf_id):
             zi = np.array([[dn, rf_id[i, 0], rf_id[i, 1]]])
             z = np.vstack((z, zi))
 
-    # add noise to input
-    ud1 = u[0, 0] + np.random.randn() * R_sim[0, 0] ** 0.5
-    ud2 = u[1, 0] + np.random.randn() * R_sim[1, 1] ** 0.5
-    ud = np.array([[ud1, ud2]]).T
-
-    xd = motion_model(xd, ud)
+    xd = motion_model(xd, u)
 
     return x_true, z, xd, ud
 
@@ -115,13 +116,13 @@ def pf_localization(px, pw, z, u):
         x = np.array([px[:, ip]]).T
         w = pw[0, ip]
 
-        #  Predict with random input sampling
+        #  Predict with random input sampling  预测粒子的状态
         ud1 = u[0, 0] + np.random.randn() * R[0, 0] ** 0.5
         ud2 = u[1, 0] + np.random.randn() * R[1, 1] ** 0.5
         ud = np.array([[ud1, ud2]]).T
         x = motion_model(x, ud)
 
-        #  Calc Importance Weight
+        #  Calc Importance Weight  根据粒子与地标的观测值以及机器人与地标的观测值更新权重
         for i in range(len(z[:, 0])):
             dx = x[0, 0] - z[i, 1]
             dy = x[1, 0] - z[i, 2]
@@ -145,10 +146,10 @@ def pf_localization(px, pw, z, u):
 
 def re_sampling(px, pw):
     """
-    low variance re-sampling
+    根据粒子权重重新采样粒子，权重越大对应粒子越多，权重初始化
     """
 
-    w_cum = np.cumsum(pw)
+    w_cum = np.cumsum(pw)  # 对数组元素的前后累加和进行计算，维度仍是[1,NP]
     base = np.arange(0.0, 1.0, 1 / NP)
     re_sample_id = base + np.random.uniform(0, 1 / NP)
     indexes = []
@@ -211,11 +212,11 @@ def main():
                       [-5.0, 20.0]])
 
     # State Vector [x y yaw v]'
-    x_est = np.zeros((4, 1))
-    x_true = np.zeros((4, 1))
+    x_est = np.zeros((4, 1))  # 定位的估计值
+    x_true = np.zeros((4, 1))  # 定位的真实值
 
-    px = np.zeros((4, NP))  # Particle store
-    pw = np.zeros((1, NP)) + 1.0 / NP  # Particle weight
+    px = np.zeros((4, NP))  # Particle store  NP个粒子的状态
+    pw = np.zeros((1, NP)) + 1.0 / NP  # Particle weight  NP个粒子的权重
     x_dr = np.zeros((4, 1))  # Dead reckoning
 
     # history
@@ -229,7 +230,7 @@ def main():
 
         x_true, z, x_dr, ud = observation(x_true, x_dr, u, rf_id)
 
-        x_est, PEst, px, pw = pf_localization(px, pw, z, ud)
+        x_est, PEst, px, pw = pf_localization(px, pw, z, u)
 
         # store data history
         h_x_est = np.hstack((h_x_est, x_est))
